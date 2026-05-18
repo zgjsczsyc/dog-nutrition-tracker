@@ -53,6 +53,8 @@ async function initDb() {
     db = new Pool({
       connectionString: DATABASE_URL,
       ssl: { rejectUnauthorized: false },
+      // 强制 IPv4，避免 Zeabur 容器网络无法解析 IPv6
+      family: 4,
       // Supabase Free Tier 最多 60 个直连，保险起见池上限设为 5
       max: 5,
       idleTimeoutMillis: 30000,
