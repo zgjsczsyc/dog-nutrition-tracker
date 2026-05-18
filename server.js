@@ -47,10 +47,17 @@ async function initDb() {
   const DATABASE_URL = process.env.DATABASE_URL;
 
   if (DATABASE_URL) {
-    // ---- PostgreSQL 模式 ----
+    // ---- PostgreSQL 模式（Supabase / Zeabur PostgreSQL 等） ----
     console.log('🐘 检测到 DATABASE_URL，使用 PostgreSQL');
     const { Pool } = require('pg');
-    db = new Pool({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    db = new Pool({
+      connectionString: DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+      // Supabase Free Tier 最多 60 个直连，保险起见池上限设为 5
+      max: 5,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    });
     dbType = 'pg';
 
     // 测试连接
