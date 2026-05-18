@@ -176,7 +176,10 @@ async function initDb() {
                VALUES (7.2, 20.16, 576, 10.8, 432, 864, 1440)`);
   }
 
-  // 初始食材数据（严格按 Excel【食材】sheet 页，ON CONFLICT DO UPDATE 保证幂等且数据同步）
+  // 初始食材数据（严格按 Excel【食材】sheet 页）
+  // 先清空旧食材（保证只保留 Excel 数据源），再全量插入
+  await dbRun('DELETE FROM ingredients');
+
   const INITIAL_INGREDIENTS = [
       { name: "皇家低脂狗粮", protein: 0.22, calories: 3.4, fat: 0.06, phosphorus: 6.8, calcium: 9.5, potassium: 4.3 },
       { name: "冠能肾脏狗粮", protein: 0.12, calories: 4.2, fat: 0.14, phosphorus: 3.0, calcium: 6.0, potassium: 5.0 },
