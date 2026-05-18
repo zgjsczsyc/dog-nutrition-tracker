@@ -1104,7 +1104,7 @@ function updateIngredientSelects() {
     const curVal = hidden ? hidden.value : '';
     const curName = curVal ? (ingredients.find(i => i.id == curVal)?.name || '') : '';
     dropdown.innerHTML = ingredients.map(i =>
-      `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}" onmousedown="event.preventDefault(); selectSearchOption('${mealEnc}', ${i.id}, '${escHtml(i.name)}')">${escHtml(i.name)}</div>`
+      `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}">${escHtml(i.name)}</div>`
     ).join('');
     if (input) input.value = curName;
   });
@@ -1115,13 +1115,11 @@ function openSearchDropdown(mealEnc) {
   const drop = document.getElementById('sel-drop-' + mealEnc);
   if (!drop) return;
   drop.classList.add('open');
-  // 如果没有选项数据，填充一次
   if (!drop.querySelector('.search-select-option')) {
     drop.innerHTML = ingredients.map(i =>
-      `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}" onmousedown="event.preventDefault(); selectSearchOption('${mealEnc}', ${i.id}, '${escHtml(i.name)}')">${escHtml(i.name)}</div>`
+      `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}">${escHtml(i.name)}</div>`
     ).join('');
   }
-  // 高亮当前选中项
   const hidden = document.getElementById('sel-' + mealEnc);
   const curVal = hidden ? hidden.value : '';
   drop.querySelectorAll('.search-select-option').forEach(opt => {
@@ -1139,19 +1137,27 @@ function filterSearchDropdown(mealEnc, query) {
     html = '<div class="search-select-empty">无匹配食材</div>';
   } else {
     html = filtered.map(i =>
-      `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}" onmousedown="event.preventDefault(); selectSearchOption('${mealEnc}', ${i.id}, '${escHtml(i.name)}')">${escHtml(i.name)}</div>`
+      `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}">${escHtml(i.name)}</div>`
     ).join('');
   }
   drop.innerHTML = html;
   drop.classList.add('open');
 }
 
-function selectSearchOption(mealEnc, id, name) {
-  const hidden = document.getElementById('sel-' + mealEnc);
-  const input = document.querySelector('#sel-wrap-' + mealEnc + ' .search-select-input');
-  if (hidden) hidden.value = id;
-  if (input) input.value = name;
-  closeAllSearchDropdowns();
+function handleSearchDropdown(e, mealEnc) {
+  const option = e.target.closest('.search-select-option');
+  if (!option) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const id = option.dataset.id;
+  const name = option.dataset.name;
+  if (id && name) {
+    const hidden = document.getElementById('sel-' + mealEnc);
+    const input = document.querySelector('#sel-wrap-' + mealEnc + ' .search-select-input');
+    if (hidden) hidden.value = id;
+    if (input) input.value = name;
+    closeAllSearchDropdowns();
+  }
 }
 
 function closeAllSearchDropdowns() {
@@ -1237,8 +1243,8 @@ function renderMealSection(meal) {
                 onkeydown="handleSearchKey(event, '${encodeURIComponent(meal)}')"
                 autocomplete="off">
               <input type="hidden" id="sel-${encodeURIComponent(meal)}" value="">
-              <div class="search-select-dropdown" id="sel-drop-${encodeURIComponent(meal)}">
-                ${ingredients.map(i => `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}" onmousedown="event.preventDefault(); selectSearchOption('${encodeURIComponent(meal)}', ${i.id}, '${escHtml(i.name)}')">${escHtml(i.name)}</div>`).join('')}
+              <div class="search-select-dropdown" id="sel-drop-${encodeURIComponent(meal)}" onmousedown="handleSearchDropdown(event, '${encodeURIComponent(meal)}')" ontouchstart="handleSearchDropdown(event, '${encodeURIComponent(meal)}')">
+                ${ingredients.map(i => `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}">${escHtml(i.name)}</div>`).join('')}
               </div>
             </div>
           </div>
