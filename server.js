@@ -16,8 +16,17 @@ app.use(express.static(path.join(__dirname, 'public')));
 let db; // 数据库实例
 let dbType; // 'pg' | 'sqlite'
 
+// PostgreSQL 用 $1,$2,... 占位符，SQLite 用 ?
+// 统一用 ? 写 SQL，pg 模式下自动转换
+function convertPlaceholders(sql) {
+  if (dbType !== 'pg') return sql;
+  let idx = 0;
+  return sql.replace(/\?/g, () => `$${++idx}`);
+}
+
 // Promise 封装（统一接口）
 const dbRun = (sql, params = []) => {
+  sql = convertPlaceholders(sql);
   if (dbType === 'pg') {
     return db.query(sql, params).then(res => ({ lastID: res.rows[0]?.id || res.rowCount, changes: res.rowCount }));
   }
@@ -26,6 +35,7 @@ const dbRun = (sql, params = []) => {
   );
 };
 const dbGet = (sql, params = []) => {
+  sql = convertPlaceholders(sql);
   if (dbType === 'pg') {
     return db.query(sql, params).then(res => res.rows[0] || null);
   }
@@ -34,6 +44,7 @@ const dbGet = (sql, params = []) => {
   );
 };
 const dbAll = (sql, params = []) => {
+  sql = convertPlaceholders(sql);
   if (dbType === 'pg') {
     return db.query(sql, params).then(res => res.rows);
   }
@@ -299,7 +310,7 @@ app.put('/api/ingredients/:id', async (req, res) => {
 
 app.delete('/api/ingredients/:id', async (req, res) => {
   try {
-    await dbRun('DELETE FROM ingredients WHERE id=$1', [req.params.id]);
+    await dbRun('DELETE FROM ingredients WHERE id=?', [req.params.id]);
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -310,7 +321,7 @@ app.delete('/api/ingredients/:id', async (req, res) => {
 app.get('/api/diet/:date', async (req, res) => {
   try {
     const rows = await dbAll(
-      `SELECT * FROM diet_records WHERE record_date=$1 ORDER BY meal_type, id`,
+      `SELECT * FROM diet_records WHERE record_date=? ORDER BY meal_type, id`,
       [req.params.date]
     );
     const MEAL_TYPES = ['早饭', '午饭', '晚饭', '夜宵', '加餐/零食'];
@@ -332,12 +343,12 @@ app.post('/api/diet', async (req, res) => {
     if (!record_date || !meal_type || !ingredient_id || !amount) {
       return res.status(400).json({ success: false, error: '参数不完整' });
     }
-    const ing = await dbGet('SELECT * FROM ingredients WHERE id=$1', [ingredient_id]);
+    const ing = await dbGet('SELECT * FROM ingredients WHERE id=?', [ingredient_id]);
     if (!ing) return res.status(400).json({ success: false, error: '食材不存在' });
     const a = parseFloat(amount);
     const result = await dbRun(
       `INSERT INTO diet_records (record_date, meal_type, ingredient_id, ingredient_name, amount, protein, calories, fat, phosphorus, calcium, potassium)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING id`,
       [record_date, meal_type, ingredient_id, ing.name, a,
        +(ing.protein * a).toFixed(4), +(ing.calories * a).toFixed(4),
        +(ing.fat * a).toFixed(4), +(ing.phosphorus * a).toFixed(4),
@@ -351,7 +362,7 @@ app.post('/api/diet', async (req, res) => {
 
 app.delete('/api/diet/:id', async (req, res) => {
   try {
-    await dbRun('DELETE FROM diet_records WHERE id=$1', [req.params.id]);
+    await dbRun('DELETE FROM diet_records WHERE id=?', [req.params.id]);
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -363,13 +374,13 @@ app.put('/api/diet/:id', async (req, res) => {
     const { amount } = req.body;
     const record = await dbGet(
       `SELECT dr.*, i.protein as ip, i.calories as ic, i.fat as iF, i.phosphorus as iph, i.calcium as ica, i.potassium as ipo
-       FROM diet_records dr JOIN ingredients i ON dr.ingredient_id=i.id WHERE dr.id=$1`,
+       FROM diet_records dr JOIN ingredients i ON dr.ingredient_id=i.id WHERE dr.id=?`,
       [req.params.id]
     );
     if (!record) return res.status(404).json({ success: false, error: '记录不存在' });
     const a = parseFloat(amount);
     await dbRun(
-      `UPDATE diet_records SET amount=$1, protein=$2, calories=$3, fat=$4, phosphorus=$5, calcium=$6, potassium=$7 WHERE id=$8`,
+      `UPDATE diet_records SET amount=?, protein=?, calories=?, fat=?, phosphorus=?, calcium=?, potassium=? WHERE id=?`,
       [a, +(record.ip*a).toFixed(4), +(record.ic*a).toFixed(4), +(record.iF*a).toFixed(4),
        +(record.iph*a).toFixed(4), +(record.ica*a).toFixed(4), +(record.ipo*a).toFixed(4), req.params.id]
     );
@@ -394,7 +405,7 @@ app.put('/api/limits', async (req, res) => {
     const { dog_weight, protein_limit, calories_limit, fat_limit, phosphorus_limit, calcium_limit, potassium_limit } = req.body;
     const nowExpr = dbType === 'pg' ? "to_char(now(), 'YYYY-MM-DD HH24:MI:SS')" : "datetime('now','localtime')";
     await dbRun(
-      `UPDATE nutrition_limits SET dog_weight=$1, protein_limit=$2, calories_limit=$3, fat_limit=$4, phosphorus_limit=$5, calcium_limit=$6, potassium_limit=$7, updated_at=${nowExpr}
+      `UPDATE nutrition_limits SET dog_weight=?, protein_limit=?, calories_limit=?, fat_limit=?, phosphorus_limit=?, calcium_limit=?, potassium_limit=?, updated_at=${nowExpr}
        WHERE id=(SELECT id FROM nutrition_limits ORDER BY id DESC LIMIT 1)`,
       [dog_weight, protein_limit, calories_limit, fat_limit, phosphorus_limit, calcium_limit, potassium_limit]
     );
@@ -415,7 +426,7 @@ app.get('/api/history', async (req, res) => {
          SUM(fat) as total_fat, SUM(phosphorus) as total_phosphorus,
          SUM(calcium) as total_calcium, SUM(potassium) as total_potassium,
          COUNT(*) as item_count
-         FROM diet_records WHERE record_date BETWEEN $1 AND $2 GROUP BY record_date ORDER BY record_date`,
+         FROM diet_records WHERE record_date BETWEEN ? AND ? GROUP BY record_date ORDER BY record_date`,
         [start_date, end_date]
       );
     } else if (month) {
@@ -424,7 +435,7 @@ app.get('/api/history', async (req, res) => {
          SUM(fat) as total_fat, SUM(phosphorus) as total_phosphorus,
          SUM(calcium) as total_calcium, SUM(potassium) as total_potassium,
          COUNT(*) as item_count
-         FROM diet_records WHERE record_date LIKE $1 GROUP BY record_date ORDER BY record_date`,
+         FROM diet_records WHERE record_date LIKE ? GROUP BY record_date ORDER BY record_date`,
         [`${month}%`]
       );
     } else {
@@ -459,7 +470,7 @@ app.get('/api/history/:date', async (req, res) => {
   try {
     const date = req.params.date;
     const rows = await dbAll(
-      `SELECT * FROM diet_records WHERE record_date=$1 ORDER BY meal_type, id`,
+      `SELECT * FROM diet_records WHERE record_date=? ORDER BY meal_type, id`,
       [date]
     );
     const MEAL_TYPES = ['早饭', '午饭', '晚饭', '夜宵', '加餐/零食'];
