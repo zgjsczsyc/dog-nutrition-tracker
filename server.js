@@ -1,5 +1,4 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
@@ -8,81 +7,159 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 数据库路径
-const DB_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
-if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
-const DB_PATH = path.join(DB_DIR, 'nutrition.db');
-
-const db = new sqlite3.Database(DB_PATH);
-
 // 中间件
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ===== Promise 封装 =====
-const run = (sql, params = []) => new Promise((res, rej) =>
-  db.run(sql, params, function(err) { err ? rej(err) : res(this); })
-);
-const get = (sql, params = []) => new Promise((res, rej) =>
-  db.get(sql, params, (err, row) => { err ? rej(err) : res(row); })
-);
-const all = (sql, params = []) => new Promise((res, rej) =>
-  db.all(sql, params, (err, rows) => { err ? rej(err) : res(rows); })
-);
+// ===== 数据库抽象层：自动检测 PostgreSQL / SQLite =====
+let db; // 数据库实例
+let dbType; // 'pg' | 'sqlite'
+
+// Promise 封装（统一接口）
+const dbRun = (sql, params = []) => {
+  if (dbType === 'pg') {
+    return db.query(sql, params).then(res => ({ lastID: res.rows[0]?.id || res.rowCount, changes: res.rowCount }));
+  }
+  return new Promise((res, rej) =>
+    db.run(sql, params, function(err) { err ? rej(err) : res(this); })
+  );
+};
+const dbGet = (sql, params = []) => {
+  if (dbType === 'pg') {
+    return db.query(sql, params).then(res => res.rows[0] || null);
+  }
+  return new Promise((res, rej) =>
+    db.get(sql, params, (err, row) => { err ? rej(err) : res(row); })
+  );
+};
+const dbAll = (sql, params = []) => {
+  if (dbType === 'pg') {
+    return db.query(sql, params).then(res => res.rows);
+  }
+  return new Promise((res, rej) =>
+    db.all(sql, params, (err, rows) => { err ? rej(err) : res(rows); })
+  );
+};
 
 // ===== 数据库初始化 =====
 async function initDb() {
-  await run(`CREATE TABLE IF NOT EXISTS ingredients (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
-    protein REAL NOT NULL DEFAULT 0,
-    calories REAL NOT NULL DEFAULT 0,
-    fat REAL NOT NULL DEFAULT 0,
-    phosphorus REAL NOT NULL DEFAULT 0,
-    calcium REAL NOT NULL DEFAULT 0,
-    potassium REAL NOT NULL DEFAULT 0,
-    created_at TEXT DEFAULT (datetime('now', 'localtime')),
-    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
-  )`);
+  const DATABASE_URL = process.env.DATABASE_URL;
 
-  await run(`CREATE TABLE IF NOT EXISTS diet_records (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    record_date TEXT NOT NULL,
-    meal_type TEXT NOT NULL,
-    ingredient_id INTEGER NOT NULL,
-    ingredient_name TEXT NOT NULL,
-    amount REAL NOT NULL,
-    protein REAL NOT NULL DEFAULT 0,
-    calories REAL NOT NULL DEFAULT 0,
-    fat REAL NOT NULL DEFAULT 0,
-    phosphorus REAL NOT NULL DEFAULT 0,
-    calcium REAL NOT NULL DEFAULT 0,
-    potassium REAL NOT NULL DEFAULT 0,
-    created_at TEXT DEFAULT (datetime('now', 'localtime'))
-  )`);
+  if (DATABASE_URL) {
+    // ---- PostgreSQL 模式 ----
+    console.log('🐘 检测到 DATABASE_URL，使用 PostgreSQL');
+    const { Pool } = require('pg');
+    db = new Pool({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    dbType = 'pg';
 
-  await run(`CREATE TABLE IF NOT EXISTS nutrition_limits (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    dog_weight REAL DEFAULT 7.2,
-    protein_limit REAL DEFAULT 20.16,
-    calories_limit REAL DEFAULT 576,
-    fat_limit REAL DEFAULT 10.8,
-    phosphorus_limit REAL DEFAULT 432,
-    calcium_limit REAL DEFAULT 864,
-    potassium_limit REAL DEFAULT 1440,
-    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
-  )`);
+    // 测试连接
+    const client = await db.connect();
+    console.log('✅ PostgreSQL 连接成功');
+    client.release();
+  } else {
+    // ---- SQLite 模式（本地开发） ----
+    console.log('📦 未检测到 DATABASE_URL，使用 SQLite（本地模式）');
+    const sqlite3 = require('sqlite3').verbose();
+    const DB_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+    if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
+    const DB_PATH = path.join(DB_DIR, 'nutrition.db');
+    db = new sqlite3.Database(DB_PATH);
+    dbType = 'sqlite';
+  }
+
+  // ===== 建表 =====
+  if (dbType === 'pg') {
+    await dbRun(`CREATE TABLE IF NOT EXISTS ingredients (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      protein REAL NOT NULL DEFAULT 0,
+      calories REAL NOT NULL DEFAULT 0,
+      fat REAL NOT NULL DEFAULT 0,
+      phosphorus REAL NOT NULL DEFAULT 0,
+      calcium REAL NOT NULL DEFAULT 0,
+      potassium REAL NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (to_char(now(), 'YYYY-MM-DD HH24:MI:SS')),
+      updated_at TEXT DEFAULT (to_char(now(), 'YYYY-MM-DD HH24:MI:SS'))
+    )`);
+    await dbRun(`CREATE TABLE IF NOT EXISTS diet_records (
+      id SERIAL PRIMARY KEY,
+      record_date TEXT NOT NULL,
+      meal_type TEXT NOT NULL,
+      ingredient_id INTEGER NOT NULL,
+      ingredient_name TEXT NOT NULL,
+      amount REAL NOT NULL,
+      protein REAL NOT NULL DEFAULT 0,
+      calories REAL NOT NULL DEFAULT 0,
+      fat REAL NOT NULL DEFAULT 0,
+      phosphorus REAL NOT NULL DEFAULT 0,
+      calcium REAL NOT NULL DEFAULT 0,
+      potassium REAL NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (to_char(now(), 'YYYY-MM-DD HH24:MI:SS'))
+    )`);
+    await dbRun(`CREATE TABLE IF NOT EXISTS nutrition_limits (
+      id SERIAL PRIMARY KEY,
+      dog_weight REAL DEFAULT 7.2,
+      protein_limit REAL DEFAULT 20.16,
+      calories_limit REAL DEFAULT 576,
+      fat_limit REAL DEFAULT 10.8,
+      phosphorus_limit REAL DEFAULT 432,
+      calcium_limit REAL DEFAULT 864,
+      potassium_limit REAL DEFAULT 1440,
+      updated_at TEXT DEFAULT (to_char(now(), 'YYYY-MM-DD HH24:MI:SS'))
+    )`);
+  } else {
+    await dbRun(`CREATE TABLE IF NOT EXISTS ingredients (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      protein REAL NOT NULL DEFAULT 0,
+      calories REAL NOT NULL DEFAULT 0,
+      fat REAL NOT NULL DEFAULT 0,
+      phosphorus REAL NOT NULL DEFAULT 0,
+      calcium REAL NOT NULL DEFAULT 0,
+      potassium REAL NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now', 'localtime')),
+      updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+    )`);
+    await dbRun(`CREATE TABLE IF NOT EXISTS diet_records (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      record_date TEXT NOT NULL,
+      meal_type TEXT NOT NULL,
+      ingredient_id INTEGER NOT NULL,
+      ingredient_name TEXT NOT NULL,
+      amount REAL NOT NULL,
+      protein REAL NOT NULL DEFAULT 0,
+      calories REAL NOT NULL DEFAULT 0,
+      fat REAL NOT NULL DEFAULT 0,
+      phosphorus REAL NOT NULL DEFAULT 0,
+      calcium REAL NOT NULL DEFAULT 0,
+      potassium REAL NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now', 'localtime'))
+    )`);
+    await dbRun(`CREATE TABLE IF NOT EXISTS nutrition_limits (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      dog_weight REAL DEFAULT 7.2,
+      protein_limit REAL DEFAULT 20.16,
+      calories_limit REAL DEFAULT 576,
+      fat_limit REAL DEFAULT 10.8,
+      phosphorus_limit REAL DEFAULT 432,
+      calcium_limit REAL DEFAULT 864,
+      potassium_limit REAL DEFAULT 1440,
+      updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+    )`);
+  }
 
   // 默认营养上限
-  const limitRow = await get('SELECT id FROM nutrition_limits LIMIT 1');
+  const limitRow = await dbGet('SELECT id FROM nutrition_limits LIMIT 1');
   if (!limitRow) {
-    await run(`INSERT INTO nutrition_limits (dog_weight, protein_limit, calories_limit, fat_limit, phosphorus_limit, calcium_limit, potassium_limit)
+    await dbRun(`INSERT INTO nutrition_limits (dog_weight, protein_limit, calories_limit, fat_limit, phosphorus_limit, calcium_limit, potassium_limit)
                VALUES (7.2, 20.16, 576, 10.8, 432, 864, 1440)`);
   }
 
   // 初始食材数据
-  const countRow = await get('SELECT COUNT(*) as cnt FROM ingredients');
+  const countRow = await dbGet(dbType === 'pg'
+    ? 'SELECT COUNT(*) as cnt FROM ingredients'
+    : 'SELECT COUNT(*) as cnt FROM ingredients');
   if (countRow.cnt === 0) {
     const INITIAL_INGREDIENTS = [
       { name: "鸡胸肉（去皮）", protein: 0.22, calories: 3.4, fat: 0.06, phosphorus: 6.8, calcium: 9.5, potassium: 4.3 },
@@ -152,14 +229,15 @@ async function initDb() {
     ];
 
     for (const ing of INITIAL_INGREDIENTS) {
-      await run(
-        `INSERT OR IGNORE INTO ingredients (name, protein, calories, fat, phosphorus, calcium, potassium) VALUES (?,?,?,?,?,?,?)`,
+      await dbRun(
+        `INSERT INTO ingredients (name, protein, calories, fat, phosphorus, calcium, potassium) VALUES (?,?,?,?,?,?,?)
+         ON CONFLICT (name) DO NOTHING`,
         [ing.name, ing.protein, ing.calories, ing.fat, ing.phosphorus, ing.calcium, ing.potassium]
       );
     }
   }
 
-  console.log('数据库初始化完成');
+  console.log(`数据库初始化完成 (${dbType === 'pg' ? 'PostgreSQL' : 'SQLite'})`);
 }
 
 // ============ 食材 API ============
@@ -168,9 +246,9 @@ app.get('/api/ingredients', async (req, res) => {
     const search = req.query.search || '';
     let rows;
     if (search) {
-      rows = await all("SELECT * FROM ingredients WHERE name LIKE ? ORDER BY name", [`%${search}%`]);
+      rows = await dbAll("SELECT * FROM ingredients WHERE name LIKE ? ORDER BY name", [`%${search}%`]);
     } else {
-      rows = await all("SELECT * FROM ingredients ORDER BY name");
+      rows = await dbAll("SELECT * FROM ingredients ORDER BY name");
     }
     res.json({ success: true, data: rows });
   } catch (e) {
@@ -182,13 +260,13 @@ app.post('/api/ingredients', async (req, res) => {
   try {
     const { name, protein, calories, fat, phosphorus, calcium, potassium } = req.body;
     if (!name) return res.status(400).json({ success: false, error: '食材名称不能为空' });
-    const result = await run(
+    const result = await dbRun(
       `INSERT INTO ingredients (name, protein, calories, fat, phosphorus, calcium, potassium) VALUES (?,?,?,?,?,?,?)`,
       [name, protein || 0, calories || 0, fat || 0, phosphorus || 0, calcium || 0, potassium || 0]
     );
     res.json({ success: true, id: result.lastID });
   } catch (e) {
-    if (e.message.includes('UNIQUE')) {
+    if (e.message && e.message.includes('UNIQUE')) {
       res.status(400).json({ success: false, error: '食材名称已存在' });
     } else {
       res.status(500).json({ success: false, error: e.message });
@@ -199,8 +277,9 @@ app.post('/api/ingredients', async (req, res) => {
 app.put('/api/ingredients/:id', async (req, res) => {
   try {
     const { name, protein, calories, fat, phosphorus, calcium, potassium } = req.body;
-    await run(
-      `UPDATE ingredients SET name=?, protein=?, calories=?, fat=?, phosphorus=?, calcium=?, potassium=?, updated_at=datetime('now','localtime') WHERE id=?`,
+    const nowExpr = dbType === 'pg' ? "to_char(now(), 'YYYY-MM-DD HH24:MI:SS')" : "datetime('now','localtime')";
+    await dbRun(
+      `UPDATE ingredients SET name=?, protein=?, calories=?, fat=?, phosphorus=?, calcium=?, potassium=?, updated_at=${nowExpr} WHERE id=?`,
       [name, protein || 0, calories || 0, fat || 0, phosphorus || 0, calcium || 0, potassium || 0, req.params.id]
     );
     res.json({ success: true });
@@ -211,7 +290,7 @@ app.put('/api/ingredients/:id', async (req, res) => {
 
 app.delete('/api/ingredients/:id', async (req, res) => {
   try {
-    await run('DELETE FROM ingredients WHERE id=?', [req.params.id]);
+    await dbRun('DELETE FROM ingredients WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -221,8 +300,8 @@ app.delete('/api/ingredients/:id', async (req, res) => {
 // ============ 饮食记录 API ============
 app.get('/api/diet/:date', async (req, res) => {
   try {
-    const rows = await all(
-      `SELECT * FROM diet_records WHERE record_date=? ORDER BY meal_type, id`,
+    const rows = await dbAll(
+      `SELECT * FROM diet_records WHERE record_date=$1 ORDER BY meal_type, id`,
       [req.params.date]
     );
     const MEAL_TYPES = ['早饭', '午饭', '晚饭', '夜宵', '加餐/零食'];
@@ -244,12 +323,12 @@ app.post('/api/diet', async (req, res) => {
     if (!record_date || !meal_type || !ingredient_id || !amount) {
       return res.status(400).json({ success: false, error: '参数不完整' });
     }
-    const ing = await get('SELECT * FROM ingredients WHERE id=?', [ingredient_id]);
+    const ing = await dbGet('SELECT * FROM ingredients WHERE id=$1', [ingredient_id]);
     if (!ing) return res.status(400).json({ success: false, error: '食材不存在' });
     const a = parseFloat(amount);
-    const result = await run(
+    const result = await dbRun(
       `INSERT INTO diet_records (record_date, meal_type, ingredient_id, ingredient_name, amount, protein, calories, fat, phosphorus, calcium, potassium)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
       [record_date, meal_type, ingredient_id, ing.name, a,
        +(ing.protein * a).toFixed(4), +(ing.calories * a).toFixed(4),
        +(ing.fat * a).toFixed(4), +(ing.phosphorus * a).toFixed(4),
@@ -263,7 +342,7 @@ app.post('/api/diet', async (req, res) => {
 
 app.delete('/api/diet/:id', async (req, res) => {
   try {
-    await run('DELETE FROM diet_records WHERE id=?', [req.params.id]);
+    await dbRun('DELETE FROM diet_records WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -273,15 +352,15 @@ app.delete('/api/diet/:id', async (req, res) => {
 app.put('/api/diet/:id', async (req, res) => {
   try {
     const { amount } = req.body;
-    const record = await get(
+    const record = await dbGet(
       `SELECT dr.*, i.protein as ip, i.calories as ic, i.fat as iF, i.phosphorus as iph, i.calcium as ica, i.potassium as ipo
-       FROM diet_records dr JOIN ingredients i ON dr.ingredient_id=i.id WHERE dr.id=?`,
+       FROM diet_records dr JOIN ingredients i ON dr.ingredient_id=i.id WHERE dr.id=$1`,
       [req.params.id]
     );
     if (!record) return res.status(404).json({ success: false, error: '记录不存在' });
     const a = parseFloat(amount);
-    await run(
-      `UPDATE diet_records SET amount=?, protein=?, calories=?, fat=?, phosphorus=?, calcium=?, potassium=? WHERE id=?`,
+    await dbRun(
+      `UPDATE diet_records SET amount=$1, protein=$2, calories=$3, fat=$4, phosphorus=$5, calcium=$6, potassium=$7 WHERE id=$8`,
       [a, +(record.ip*a).toFixed(4), +(record.ic*a).toFixed(4), +(record.iF*a).toFixed(4),
        +(record.iph*a).toFixed(4), +(record.ica*a).toFixed(4), +(record.ipo*a).toFixed(4), req.params.id]
     );
@@ -294,7 +373,7 @@ app.put('/api/diet/:id', async (req, res) => {
 // ============ 营养上限 API ============
 app.get('/api/limits', async (req, res) => {
   try {
-    const row = await get('SELECT * FROM nutrition_limits ORDER BY id DESC LIMIT 1');
+    const row = await dbGet('SELECT * FROM nutrition_limits ORDER BY id DESC LIMIT 1');
     res.json({ success: true, data: row });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -304,8 +383,9 @@ app.get('/api/limits', async (req, res) => {
 app.put('/api/limits', async (req, res) => {
   try {
     const { dog_weight, protein_limit, calories_limit, fat_limit, phosphorus_limit, calcium_limit, potassium_limit } = req.body;
-    await run(
-      `UPDATE nutrition_limits SET dog_weight=?, protein_limit=?, calories_limit=?, fat_limit=?, phosphorus_limit=?, calcium_limit=?, potassium_limit=?, updated_at=datetime('now','localtime')
+    const nowExpr = dbType === 'pg' ? "to_char(now(), 'YYYY-MM-DD HH24:MI:SS')" : "datetime('now','localtime')";
+    await dbRun(
+      `UPDATE nutrition_limits SET dog_weight=$1, protein_limit=$2, calories_limit=$3, fat_limit=$4, phosphorus_limit=$5, calcium_limit=$6, potassium_limit=$7, updated_at=${nowExpr}
        WHERE id=(SELECT id FROM nutrition_limits ORDER BY id DESC LIMIT 1)`,
       [dog_weight, protein_limit, calories_limit, fat_limit, phosphorus_limit, calcium_limit, potassium_limit]
     );
@@ -321,25 +401,25 @@ app.get('/api/history', async (req, res) => {
     const { month, start_date, end_date } = req.query;
     let rows;
     if (start_date && end_date) {
-      rows = await all(
+      rows = await dbAll(
         `SELECT record_date, SUM(protein) as total_protein, SUM(calories) as total_calories,
          SUM(fat) as total_fat, SUM(phosphorus) as total_phosphorus,
          SUM(calcium) as total_calcium, SUM(potassium) as total_potassium,
          COUNT(*) as item_count
-         FROM diet_records WHERE record_date BETWEEN ? AND ? GROUP BY record_date ORDER BY record_date`,
+         FROM diet_records WHERE record_date BETWEEN $1 AND $2 GROUP BY record_date ORDER BY record_date`,
         [start_date, end_date]
       );
     } else if (month) {
-      rows = await all(
+      rows = await dbAll(
         `SELECT record_date, SUM(protein) as total_protein, SUM(calories) as total_calories,
          SUM(fat) as total_fat, SUM(phosphorus) as total_phosphorus,
          SUM(calcium) as total_calcium, SUM(potassium) as total_potassium,
          COUNT(*) as item_count
-         FROM diet_records WHERE record_date LIKE ? GROUP BY record_date ORDER BY record_date`,
+         FROM diet_records WHERE record_date LIKE $1 GROUP BY record_date ORDER BY record_date`,
         [`${month}%`]
       );
     } else {
-      rows = await all(
+      rows = await dbAll(
         `SELECT record_date, SUM(protein) as total_protein, SUM(calories) as total_calories,
          SUM(fat) as total_fat, SUM(phosphorus) as total_phosphorus,
          SUM(calcium) as total_calcium, SUM(potassium) as total_potassium,
@@ -356,7 +436,7 @@ app.get('/api/history', async (req, res) => {
 // 历史记录 - 获取有记录的日期列表
 app.get('/api/history/dates', async (req, res) => {
   try {
-    const rows = await all(
+    const rows = await dbAll(
       `SELECT DISTINCT record_date FROM diet_records ORDER BY record_date DESC`
     );
     res.json({ success: true, data: rows.map(r => r.record_date) });
@@ -369,8 +449,8 @@ app.get('/api/history/dates', async (req, res) => {
 app.get('/api/history/:date', async (req, res) => {
   try {
     const date = req.params.date;
-    const rows = await all(
-      `SELECT * FROM diet_records WHERE record_date=? ORDER BY meal_type, id`,
+    const rows = await dbAll(
+      `SELECT * FROM diet_records WHERE record_date=$1 ORDER BY meal_type, id`,
       [date]
     );
     const MEAL_TYPES = ['早饭', '午饭', '晚饭', '夜宵', '加餐/零食'];
@@ -380,7 +460,6 @@ app.get('/api/history/:date', async (req, res) => {
       if (!grouped[r.meal_type]) grouped[r.meal_type] = [];
       grouped[r.meal_type].push(r);
     });
-    // 计算当日汇总
     const totals = rows.reduce((acc, r) => ({
       protein: acc.protein + (r.protein || 0),
       calories: acc.calories + (r.calories || 0),
@@ -404,7 +483,7 @@ app.get('*', (req, res) => {
 // ===== 启动 =====
 initDb().then(() => {
   app.listen(PORT, () => {
-    console.log(`🐾 狗狗营养监控服务已启动: http://localhost:${PORT}`);
+    console.log(`🐾 狗狗营养监控服务已启动: http://localhost:${PORT} [${dbType === 'pg' ? '🐘 PostgreSQL' : '📦 SQLite'}]`);
   });
 }).catch(err => {
   console.error('数据库初始化失败:', err);

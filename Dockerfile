@@ -6,7 +6,7 @@ WORKDIR /app
 # 复制 package.json
 COPY package*.json ./
 
-# 安装依赖
+# 安装依赖（含pg用于PostgreSQL连接）
 RUN npm ci --only=production
 
 # 复制源代码（不包含 node_modules）
