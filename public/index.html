@@ -1153,7 +1153,8 @@ function handleSearchDropdown(e, mealEnc) {
   const name = option.dataset.name;
   if (id && name) {
     const hidden = document.getElementById('sel-' + mealEnc);
-    const input = document.querySelector('#sel-wrap-' + mealEnc + ' .search-select-input');
+    const wrapper = document.getElementById('sel-wrap-' + mealEnc);
+    const input = wrapper ? wrapper.querySelector('.search-select-input') : null;
     if (hidden) hidden.value = id;
     if (input) input.value = name;
     closeAllSearchDropdowns();
