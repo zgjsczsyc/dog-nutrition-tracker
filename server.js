@@ -176,12 +176,8 @@ async function initDb() {
                VALUES (7.2, 20.16, 576, 10.8, 432, 864, 1440)`);
   }
 
-  // 初始食材数据
-  const countRow = await dbGet(dbType === 'pg'
-    ? 'SELECT COUNT(*) as cnt FROM ingredients'
-    : 'SELECT COUNT(*) as cnt FROM ingredients');
-  if (countRow.cnt === 0) {
-    const INITIAL_INGREDIENTS = [
+  // 初始食材数据（ON CONFLICT DO NOTHING 保证幂等，每次启动都尝试补全缺失的食材）
+  const INITIAL_INGREDIENTS = [
       { name: "鸡胸肉（去皮）", protein: 0.22, calories: 3.4, fat: 0.06, phosphorus: 6.8, calcium: 9.5, potassium: 4.3 },
       { name: "鸡腿肉（去皮）", protein: 0.12, calories: 4.2, fat: 0.14, phosphorus: 3.0, calcium: 6.0, potassium: 5.0 },
       { name: "鸡里脊/鸡柳", protein: 0.065, calories: 0.85, fat: 0.025, phosphorus: 1.4, calcium: 1.5, potassium: 1.3 },
@@ -248,13 +244,12 @@ async function initDb() {
       { name: "鹌鹑蛋（熟）", protein: 0.032, calories: 0.43, fat: 0.013, phosphorus: 0.45, calcium: 0.61, potassium: 1.81 }
     ];
 
-    for (const ing of INITIAL_INGREDIENTS) {
-      await dbRun(
-        `INSERT INTO ingredients (name, protein, calories, fat, phosphorus, calcium, potassium) VALUES (?,?,?,?,?,?,?)
-         ON CONFLICT (name) DO NOTHING`,
-        [ing.name, ing.protein, ing.calories, ing.fat, ing.phosphorus, ing.calcium, ing.potassium]
-      );
-    }
+  for (const ing of INITIAL_INGREDIENTS) {
+    await dbRun(
+      `INSERT INTO ingredients (name, protein, calories, fat, phosphorus, calcium, potassium) VALUES (?,?,?,?,?,?,?)
+       ON CONFLICT (name) DO NOTHING`,
+      [ing.name, ing.protein, ing.calories, ing.fat, ing.phosphorus, ing.calcium, ing.potassium]
+    );
   }
 
   console.log(`数据库初始化完成 (${dbType === 'pg' ? 'PostgreSQL' : 'SQLite'})`);
