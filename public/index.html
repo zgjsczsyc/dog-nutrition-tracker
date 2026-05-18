@@ -1120,6 +1120,7 @@ function renderMealSection(meal) {
             <span>脂 ${fmtNum(r.fat,2)}g</span>
             <span>磷 ${fmtNum(r.phosphorus,1)}mg</span>
             <span>钙 ${fmtNum(r.calcium,1)}mg</span>
+            <span>钾 ${fmtNum(r.potassium,1)}mg</span>
           </div>
         </div>
         <div class="food-amount">${r.amount}<span style="font-size:11px;color:#aaa;margin-left:1px">g</span></div>
@@ -1159,6 +1160,9 @@ function renderMealSection(meal) {
           <span>蛋白 <b>${fmtNum(total.protein,2)}g</b></span>
           <span>热量 <b>${fmtNum(total.calories,1)} kcal</b></span>
           <span>脂肪 <b>${fmtNum(total.fat,2)}g</b></span>
+          <span>磷 <b>${fmtNum(total.phosphorus,1)}mg</b></span>
+          <span>钙 <b>${fmtNum(total.calcium,1)}mg</b></span>
+          <span>钾 <b>${fmtNum(total.potassium,1)}mg</b></span>
           <span>脂/热比 <b>${fatCalRatio}g/100kcal</b></span>
         </div>` : ''}
       </div>
