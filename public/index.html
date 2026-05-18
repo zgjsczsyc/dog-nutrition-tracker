@@ -1,0 +1,1738 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>🐾 达达营养监控</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --primary: #FF8C42;
+      --primary-light: #FFB380;
+      --primary-dark: #E06C20;
+      --secondary: #4A9EBF;
+      --success: #5CB85C;
+      --warning: #F0AD4E;
+      --danger: #D9534F;
+      --bg: #FFF8F3;
+      --card-bg: #FFFFFF;
+      --text: #333333;
+      --text-light: #888888;
+      --border: #E8E0DB;
+      --shadow: 0 2px 12px rgba(0,0,0,0.08);
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 80px;
+    }
+
+    /* ===== Header ===== */
+    .header {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      padding: 16px 20px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(255,140,66,0.3);
+    }
+    .header-inner {
+      max-width: 800px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header h1 { font-size: 20px; font-weight: 700; }
+    .header-sub { font-size: 13px; opacity: 0.9; }
+
+    /* ===== Tab Nav ===== */
+    .tab-nav {
+      background: white;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 58px;
+      z-index: 99;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .tab-nav-inner {
+      max-width: 800px;
+      margin: 0 auto;
+      display: flex;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 12px 8px;
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      color: var(--text-light);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+    .tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    /* ===== Main Content ===== */
+    .main { max-width: 800px; margin: 0 auto; padding: 16px; }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ===== Card ===== */
+    .card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--primary-dark);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ===== Date Picker ===== */
+    .date-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .date-label { font-size: 15px; font-weight: 600; color: var(--primary-dark); }
+    .date-input {
+      border: 2px solid var(--primary-light);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 15px;
+      outline: none;
+      color: var(--text);
+      background: white;
+    }
+    .date-input:focus { border-color: var(--primary); }
+    .btn-today {
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    /* ===== Meal Section ===== */
+    .meal-section { margin-bottom: 14px; }
+    .meal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(90deg, #FFF0E6, #FFFFFF);
+      border-left: 4px solid var(--primary);
+      border-radius: 0 8px 8px 0;
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    .meal-title { font-size: 15px; font-weight: 700; color: var(--primary-dark); }
+    .meal-total { font-size: 13px; color: var(--text-light); }
+    .meal-toggle { font-size: 18px; color: var(--primary); transition: transform 0.2s; }
+    .meal-toggle.open { transform: rotate(180deg); }
+
+    .meal-body { padding: 0 4px; }
+
+    /* ===== Food Item ===== */
+    .food-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      background: #FAFAFA;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      gap: 10px;
+      border: 1px solid var(--border);
+    }
+    .food-name { flex: 1; font-size: 14px; font-weight: 500; }
+    .food-amount {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 14px;
+      color: var(--secondary);
+      font-weight: 600;
+    }
+    .food-nutrients {
+      display: flex;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-light);
+      flex-wrap: wrap;
+    }
+    .btn-del-food {
+      background: none;
+      border: none;
+      color: var(--danger);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 2px 4px;
+      line-height: 1;
+    }
+
+    /* ===== Add Food Form ===== */
+    .add-food-form {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-label { font-size: 12px; color: var(--text-light); font-weight: 500; }
+    .form-select, .form-input {
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-size: 14px;
+      outline: none;
+      background: white;
+      color: var(--text);
+      min-width: 0;
+    }
+    .form-select:focus, .form-input:focus { border-color: var(--primary); }
+    .ingredient-select { min-width: 140px; }
+    .amount-input { width: 90px; }
+    .btn-add {
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 18px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .btn-add:hover { background: var(--primary-dark); }
+
+    /* ===== Nutrition Summary Table ===== */
+    .nutrition-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 14px;
+      margin-top: 8px;
+    }
+    .nutrition-table th {
+      background: var(--primary);
+      color: white;
+      padding: 10px 8px;
+      text-align: center;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .nutrition-table th:first-child { border-radius: 8px 0 0 0; }
+    .nutrition-table th:last-child { border-radius: 0 8px 0 0; }
+    .nutrition-table td {
+      padding: 9px 8px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+    .nutrition-table tr:last-child td { border-bottom: none; }
+    .nutrition-table tr:nth-child(even) td { background: #FFF8F3; }
+    .nutrition-table .total-row td {
+      background: #FFF0E0 !important;
+      font-weight: 700;
+      font-size: 15px;
+    }
+    .nutrition-table .limit-row td {
+      background: #F0F8FF !important;
+      color: var(--secondary);
+      font-style: italic;
+    }
+    .nutrition-table .percent-row td {
+      font-weight: 600;
+    }
+
+    /* ===== Progress Bars ===== */
+    .progress-section { margin-top: 4px; }
+    .progress-item { margin-bottom: 12px; }
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+    .progress-name { font-weight: 600; color: var(--text); }
+    .progress-val { color: var(--text-light); }
+    .progress-bar-bg {
+      background: #EEE;
+      border-radius: 6px;
+      height: 10px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 6px;
+      transition: width 0.4s ease;
+    }
+    .fill-safe { background: linear-gradient(90deg, #5CB85C, #8BC34A); }
+    .fill-warn { background: linear-gradient(90deg, #F0AD4E, #FF9800); }
+    .fill-danger { background: linear-gradient(90deg, #D9534F, #F44336); }
+
+    /* ===== Fat/Calorie Ratio Card ===== */
+    .ratio-card {
+      background: linear-gradient(135deg, #E8F4FD, #D1ECF1);
+      border-radius: 10px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 8px;
+    }
+    .ratio-label { font-size: 14px; color: #155724; font-weight: 600; }
+    .ratio-value { font-size: 22px; font-weight: 800; color: var(--secondary); }
+    .ratio-ref { font-size: 12px; color: #888; margin-top: 2px; }
+    .ratio-level {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 12px;
+    }
+    .level-low { background: #D4EDDA; color: #155724; }
+    .level-mid { background: #FFF3CD; color: #856404; }
+    .level-high { background: #FADBD8; color: #9B1C1C; }
+    .level-vhigh { background: #F1948A; color: #641E16; }
+
+    /* ===== Ingredients Page ===== */
+    .search-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .search-input {
+      flex: 1;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 15px;
+      outline: none;
+    }
+    .search-input:focus { border-color: var(--primary); }
+    .btn-search {
+      background: var(--secondary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .ing-table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .ing-table {
+      width: 100%;
+      min-width: 520px;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 13px;
+    }
+    .ing-table th {
+      background: var(--secondary);
+      color: white;
+      padding: 10px 8px;
+      text-align: center;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+    }
+    .ing-table th:first-child { border-radius: 8px 0 0 0; }
+    .ing-table th:last-child { border-radius: 0 8px 0 0; }
+    .ing-table td {
+      padding: 9px 8px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+    .ing-table tr:nth-child(even) td { background: #F8F8FF; }
+    .ing-table td:first-child { text-align: left; font-weight: 500; padding-left: 12px; }
+    .btn-edit-ing, .btn-del-ing {
+      border: none;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-edit-ing { background: #EAF4FD; color: var(--secondary); margin-right: 4px; }
+    .btn-del-ing { background: #FDEDED; color: var(--danger); }
+
+    /* ===== Add Ingredient Form ===== */
+    .add-ing-form {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .add-ing-form .form-group.full { grid-column: 1 / -1; }
+    .btn-save-ing {
+      background: var(--success);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: 600;
+      grid-column: 1 / -1;
+    }
+
+    /* ===== Settings Page ===== */
+    .settings-form {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+    }
+    .btn-save-settings {
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-size: 15px;
+      cursor: pointer;
+      font-weight: 700;
+      grid-column: 1 / -1;
+    }
+
+    /* ===== Modal ===== */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 999;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: white;
+      border-radius: var(--radius);
+      padding: 20px;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+    }
+    .modal-title {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: var(--primary-dark);
+    }
+    .modal-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .modal-form .form-group.full { grid-column: 1 / -1; }
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .btn-cancel {
+      flex: 1;
+      background: #F0F0F0;
+      color: var(--text);
+      border: none;
+      border-radius: 8px;
+      padding: 11px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-confirm {
+      flex: 2;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 11px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    /* ===== Toast ===== */
+    .toast {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #333;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 14px;
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 9999;
+      white-space: nowrap;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .toast.success { background: var(--success); }
+    .toast.error { background: var(--danger); }
+
+    /* ===== Bottom Nav ===== */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      border-top: 1px solid var(--border);
+      display: flex;
+      z-index: 98;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.08);
+    }
+    .bottom-nav-btn {
+      flex: 1;
+      padding: 10px 0;
+      border: none;
+      background: transparent;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      cursor: pointer;
+      color: var(--text-light);
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .bottom-nav-btn.active { color: var(--primary); }
+    .nav-icon { font-size: 20px; line-height: 1; }
+
+    /* ===== Utils ===== */
+    .unit { font-size: 11px; color: var(--text-light); }
+    .text-danger { color: var(--danger) !important; font-weight: 700; }
+    .text-warn { color: var(--warning) !important; font-weight: 700; }
+    .text-success { color: var(--success) !important; }
+    .empty-hint {
+      text-align: center;
+      color: var(--text-light);
+      padding: 20px;
+      font-size: 14px;
+    }
+
+    /* ===== History Page ===== */
+    .history-controls {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .history-controls .form-group { min-width: 140px; }
+    .btn-history-query {
+      background: var(--secondary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 18px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .history-quick-btns {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .btn-quick {
+      background: #F0F8FF;
+      color: var(--secondary);
+      border: 1.5px solid var(--secondary);
+      border-radius: 16px;
+      padding: 5px 14px;
+      font-size: 13px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .btn-quick.active, .btn-quick:hover {
+      background: var(--secondary);
+      color: white;
+    }
+    .chart-container {
+      position: relative;
+      width: 100%;
+      height: 300px;
+      margin: 8px 0;
+    }
+    .chart-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .chart-tab-btn {
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      padding: 5px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      background: white;
+      color: var(--text-light);
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .chart-tab-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+    .history-day-card {
+      background: #FAFAFA;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .history-day-card:hover { border-color: var(--primary-light); box-shadow: 0 2px 8px rgba(255,140,66,0.15); }
+    .history-day-card.expanded { border-color: var(--primary); background: #FFF8F3; }
+    .history-day-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .history-day-date { font-size: 15px; font-weight: 700; color: var(--primary-dark); }
+    .history-day-summary { font-size: 13px; color: var(--text-light); display: flex; gap: 10px; flex-wrap: wrap; }
+    .history-day-toggle { font-size: 16px; color: var(--primary); transition: transform 0.2s; }
+    .history-day-toggle.open { transform: rotate(180deg); }
+    .history-day-detail {
+      display: none;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+    }
+    .history-day-detail.open { display: block; }
+    .history-meal-group { margin-bottom: 10px; }
+    .history-meal-title { font-size: 13px; font-weight: 700; color: var(--secondary); margin-bottom: 4px; }
+    .history-meal-items { font-size: 12px; color: #555; line-height: 1.8; padding-left: 12px; }
+    .history-day-totals {
+      background: #FFF0E0;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-top: 8px;
+      font-size: 13px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 6px;
+    }
+    .history-day-totals b { color: var(--primary-dark); }
+
+    @media (max-width: 480px) {
+      .add-food-form { flex-direction: column; }
+      .ingredient-select { width: 100%; }
+      .amount-input { width: 100%; }
+      .btn-add { width: 100%; }
+      .nutrition-table th, .nutrition-table td { font-size: 12px; padding: 8px 5px; }
+      .chart-container { height: 250px; }
+      .history-controls { flex-direction: column; }
+      .history-controls .form-group { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <div>
+      <h1>🐾 达达每日营养监控</h1>
+      <div class="header-sub">科学饮食，健康相伴</div>
+    </div>
+  </div>
+</header>
+
+<nav class="tab-nav">
+  <div class="tab-nav-inner">
+    <button class="tab-btn active" onclick="switchTab('diet')">📋 今日饮食</button>
+    <button class="tab-btn" onclick="switchTab('history')">📊 历史分析</button>
+    <button class="tab-btn" onclick="switchTab('ingredients')">🥩 食材库</button>
+    <button class="tab-btn" onclick="switchTab('settings')">⚙️ 设置</button>
+  </div>
+</nav>
+
+<main class="main">
+
+  <!-- ===== 今日饮食 ===== -->
+  <div id="tab-diet" class="tab-panel active">
+    <div class="card">
+      <div class="date-row">
+        <span class="date-label">📅 选择日期</span>
+        <input type="date" class="date-input" id="dietDate" onchange="loadDiet()">
+        <button class="btn-today" onclick="setToday()">今天</button>
+      </div>
+    </div>
+
+    <!-- 各餐次 -->
+    <div id="meals-container"></div>
+
+    <!-- 每日汇总 -->
+    <div class="card" id="daily-summary-card">
+      <div class="card-title">📊 今日营养汇总</div>
+      <div id="daily-summary-content">
+        <div class="empty-hint">请先选择日期并添加饮食记录</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 历史分析 ===== -->
+  <div id="tab-history" class="tab-panel">
+    <!-- 日期范围选择 -->
+    <div class="card">
+      <div class="card-title">📅 选择日期范围</div>
+      <div class="history-controls">
+        <div class="form-group">
+          <label class="form-label">开始日期</label>
+          <input type="date" class="form-input" id="historyStart">
+        </div>
+        <div class="form-group">
+          <label class="form-label">结束日期</label>
+          <input type="date" class="form-input" id="historyEnd">
+        </div>
+        <button class="btn-history-query" onclick="loadHistory()">🔍 查询</button>
+      </div>
+      <div class="history-quick-btns">
+        <button class="btn-quick" onclick="setHistoryRange(7)">近7天</button>
+        <button class="btn-quick" onclick="setHistoryRange(14)">近14天</button>
+        <button class="btn-quick" onclick="setHistoryRange(30)">近30天</button>
+        <button class="btn-quick" onclick="setHistoryRange(90)">近3个月</button>
+      </div>
+    </div>
+
+    <!-- 趋势图表 -->
+    <div class="card">
+      <div class="card-title">📈 营养摄入趋势</div>
+      <div class="chart-tabs" id="chartTabs">
+        <button class="chart-tab-btn active" onclick="switchChart('all')">全部</button>
+        <button class="chart-tab-btn" onclick="switchChart('protein')">🥩 蛋白</button>
+        <button class="chart-tab-btn" onclick="switchChart('calories')">🔥 热量</button>
+        <button class="chart-tab-btn" onclick="switchChart('fat')">🫙 脂肪</button>
+        <button class="chart-tab-btn" onclick="switchChart('phosphorus')">🔬 磷</button>
+        <button class="chart-tab-btn" onclick="switchChart('calcium')">🦴 钙</button>
+        <button class="chart-tab-btn" onclick="switchChart('potassium')">🍌 钾</button>
+      </div>
+      <div class="chart-container">
+        <canvas id="trendChart"></canvas>
+      </div>
+    </div>
+
+    <!-- 脂肪/热量比趋势 -->
+    <div class="card">
+      <div class="card-title">⚖️ 脂肪/热量比趋势</div>
+      <div class="chart-container">
+        <canvas id="ratioChart"></canvas>
+      </div>
+    </div>
+
+    <!-- 历史记录列表 -->
+    <div class="card">
+      <div class="card-title">📋 历史记录明细</div>
+      <div id="history-list">
+        <div class="empty-hint">请选择日期范围后查询</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 食材库 ===== -->
+  <div id="tab-ingredients" class="tab-panel">
+    <div class="card">
+      <div class="card-title">🔍 搜索食材</div>
+      <div class="search-bar">
+        <input type="text" class="search-input" id="ingSearch" placeholder="输入食材名称搜索…" oninput="searchIngredients()">
+      </div>
+      <div class="ing-table-wrapper">
+        <table class="ing-table">
+          <thead>
+            <tr>
+              <th>食材名称</th>
+              <th>蛋白<br><span style="font-weight:400;font-size:11px">g/g</span></th>
+              <th>热量<br><span style="font-weight:400;font-size:11px">kcal/g</span></th>
+              <th>脂肪<br><span style="font-weight:400;font-size:11px">g/g</span></th>
+              <th>磷<br><span style="font-weight:400;font-size:11px">mg/g</span></th>
+              <th>钙<br><span style="font-weight:400;font-size:11px">mg/g</span></th>
+              <th>钾<br><span style="font-weight:400;font-size:11px">mg/g</span></th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="ing-table-body">
+            <tr><td colspan="8" class="empty-hint">加载中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">➕ 新增食材</div>
+      <div class="add-ing-form">
+        <div class="form-group full">
+          <label class="form-label">食材名称 *</label>
+          <input type="text" class="form-input" id="newIngName" placeholder="例：鸡胸肉">
+        </div>
+        <div class="form-group">
+          <label class="form-label">蛋白 (g/g)</label>
+          <input type="number" class="form-input" id="newIngProtein" step="0.001" placeholder="0.000">
+        </div>
+        <div class="form-group">
+          <label class="form-label">热量 (kcal/g)</label>
+          <input type="number" class="form-input" id="newIngCalories" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">脂肪 (g/g)</label>
+          <input type="number" class="form-input" id="newIngFat" step="0.001" placeholder="0.000">
+        </div>
+        <div class="form-group">
+          <label class="form-label">磷 (mg/g)</label>
+          <input type="number" class="form-input" id="newIngPhosphorus" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">钙 (mg/g)</label>
+          <input type="number" class="form-input" id="newIngCalcium" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">钾 (mg/g)</label>
+          <input type="number" class="form-input" id="newIngPotassium" step="0.01" placeholder="0.00">
+        </div>
+        <button class="btn-save-ing" onclick="addIngredient()">✅ 保存新食材</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 设置 ===== -->
+  <div id="tab-settings" class="tab-panel">
+    <div class="card">
+      <div class="card-title">⚙️ 营养上限设置</div>
+      <p style="font-size:13px;color:#888;margin-bottom:14px;">根据达达的体重与疾病阶段（CKD II/III/IV）调整推荐上限。默认为 7.2kg NRC/IRIS 标准。</p>
+      <div class="settings-form">
+        <div class="form-group">
+          <label class="form-label">🐾 体重 (kg)</label>
+          <input type="number" class="form-input" id="setWeight" step="0.1" placeholder="7.2">
+        </div>
+        <div class="form-group">
+          <label class="form-label">🥩 蛋白上限 (g/天)</label>
+          <input type="number" class="form-input" id="setProtein" step="0.1" placeholder="20.16">
+        </div>
+        <div class="form-group">
+          <label class="form-label">🔥 热量上限 (kcal/天)</label>
+          <input type="number" class="form-input" id="setCalories" step="1" placeholder="576">
+        </div>
+        <div class="form-group">
+          <label class="form-label">🫙 脂肪上限 (g/天)</label>
+          <input type="number" class="form-input" id="setFat" step="0.1" placeholder="10.8">
+        </div>
+        <div class="form-group">
+          <label class="form-label">🔬 磷上限 (mg/天)</label>
+          <input type="number" class="form-input" id="setPhosphorus" step="1" placeholder="432">
+        </div>
+        <div class="form-group">
+          <label class="form-label">🦴 钙上限 (mg/天)</label>
+          <input type="number" class="form-input" id="setCalcium" step="1" placeholder="864">
+        </div>
+        <div class="form-group">
+          <label class="form-label">🍌 钾上限 (mg/天)</label>
+          <input type="number" class="form-input" id="setPotassium" step="1" placeholder="1440">
+        </div>
+        <button class="btn-save-settings" onclick="saveLimits()">💾 保存设置</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📖 参考说明</div>
+      <div style="font-size:13px;line-height:1.8;color:#555;">
+        <p><strong>NRC 2006 标准（7.2kg）</strong></p>
+        <p>• 蛋白质：CKD II &lt;2.0g/kg，III &lt;1.5g/kg，IV &lt;1.2g/kg</p>
+        <p>• 热量：C期心病 60-80kcal/kg（RER计算）</p>
+        <p>• 脂肪：&lt;1.5g/100kcal（约&lt;15g/天）</p>
+        <p>• 磷：CKD II &lt;60mg/kg，III &lt;45mg/kg，IV &lt;30mg/kg</p>
+        <p>• 钙：&lt;120-150mg/kg</p>
+        <p style="margin-top:8px;color:#888;">脂肪/热量比 &lt;1.5g/100kcal 为适宜，&gt;2.5 为偏高</p>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ===== 编辑食材 Modal ===== -->
+<div class="modal-overlay" id="editIngModal">
+  <div class="modal">
+    <div class="modal-title">✏️ 编辑食材</div>
+    <input type="hidden" id="editIngId">
+    <div class="modal-form">
+      <div class="form-group full">
+        <label class="form-label">食材名称 *</label>
+        <input type="text" class="form-input" id="editIngName">
+      </div>
+      <div class="form-group">
+        <label class="form-label">蛋白 (g/g)</label>
+        <input type="number" class="form-input" id="editIngProtein" step="0.001">
+      </div>
+      <div class="form-group">
+        <label class="form-label">热量 (kcal/g)</label>
+        <input type="number" class="form-input" id="editIngCalories" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">脂肪 (g/g)</label>
+        <input type="number" class="form-input" id="editIngFat" step="0.001">
+      </div>
+      <div class="form-group">
+        <label class="form-label">磷 (mg/g)</label>
+        <input type="number" class="form-input" id="editIngPhosphorus" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">钙 (mg/g)</label>
+        <input type="number" class="form-input" id="editIngCalcium" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">钾 (mg/g)</label>
+        <input type="number" class="form-input" id="editIngPotassium" step="0.01">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('editIngModal')">取消</button>
+      <button class="btn-confirm" onclick="saveEditIngredient()">保存修改</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Toast ===== -->
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';
+let ingredients = [];
+let limits = { protein_limit: 20.16, calories_limit: 576, fat_limit: 10.8, phosphorus_limit: 432, calcium_limit: 864, potassium_limit: 1440 };
+let dietData = {};
+let historyData = [];
+let trendChart = null;
+let ratioChart = null;
+let currentChartView = 'all';
+const MEAL_TYPES = ['早饭', '午饭', '晚饭', '夜宵', '加餐/零食'];
+const MEAL_ICONS = { '早饭': '🌅', '午饭': '☀️', '晚饭': '🌙', '夜宵': '⭐', '加餐/零食': '🍎' };
+const MEAL_COLORS = { '早饭': '#FF9500', '午饭': '#FF6B35', '晚饭': '#7C4DFF', '夜宵': '#0288D1', '加餐/零食': '#2E7D32' };
+
+// ===== 初始化 =====
+async function init() {
+  setToday();
+  await Promise.all([loadIngredients(), loadLimits()]);
+  loadDiet();
+}
+
+function setToday() {
+  const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+  document.getElementById('dietDate').value = today;
+}
+
+// ===== Tab切换 =====
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', ['diet','history','ingredients','settings'][i] === tab);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  if (tab === 'ingredients') loadIngredients();
+  if (tab === 'settings') loadSettingsForm();
+  if (tab === 'history') initHistoryPage();
+}
+
+// ===== 食材 =====
+async function loadIngredients(search = '') {
+  const resp = await fetch(`${API}/api/ingredients?search=${encodeURIComponent(search)}`);
+  const data = await resp.json();
+  ingredients = data.data || [];
+  renderIngTable(ingredients);
+  updateIngredientSelects();
+}
+
+function renderIngTable(list) {
+  const tbody = document.getElementById('ing-table-body');
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-hint">暂无食材数据</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(ing => `
+    <tr>
+      <td>${escHtml(ing.name)}</td>
+      <td>${fmtNum(ing.protein, 4)}</td>
+      <td>${fmtNum(ing.calories, 3)}</td>
+      <td>${fmtNum(ing.fat, 4)}</td>
+      <td>${fmtNum(ing.phosphorus, 3)}</td>
+      <td>${fmtNum(ing.calcium, 3)}</td>
+      <td>${fmtNum(ing.potassium, 3)}</td>
+      <td>
+        <button class="btn-edit-ing" onclick="openEditIng(${ing.id})">编辑</button>
+        <button class="btn-del-ing" onclick="delIngredient(${ing.id},'${escHtml(ing.name)}')">删除</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function searchIngredients() {
+  const q = document.getElementById('ingSearch').value;
+  loadIngredients(q);
+}
+
+async function addIngredient() {
+  const name = document.getElementById('newIngName').value.trim();
+  if (!name) { showToast('请输入食材名称', 'error'); return; }
+  const body = {
+    name,
+    protein: parseFloat(document.getElementById('newIngProtein').value) || 0,
+    calories: parseFloat(document.getElementById('newIngCalories').value) || 0,
+    fat: parseFloat(document.getElementById('newIngFat').value) || 0,
+    phosphorus: parseFloat(document.getElementById('newIngPhosphorus').value) || 0,
+    calcium: parseFloat(document.getElementById('newIngCalcium').value) || 0,
+    potassium: parseFloat(document.getElementById('newIngPotassium').value) || 0,
+  };
+  const resp = await fetch(`${API}/api/ingredients`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const data = await resp.json();
+  if (data.success) {
+    showToast('✅ 食材添加成功');
+    ['newIngName','newIngProtein','newIngCalories','newIngFat','newIngPhosphorus','newIngCalcium','newIngPotassium'].forEach(id => document.getElementById(id).value = '');
+    loadIngredients();
+  } else {
+    showToast(data.error || '添加失败', 'error');
+  }
+}
+
+function openEditIng(id) {
+  const ing = ingredients.find(i => i.id === id);
+  if (!ing) return;
+  document.getElementById('editIngId').value = id;
+  document.getElementById('editIngName').value = ing.name;
+  document.getElementById('editIngProtein').value = ing.protein;
+  document.getElementById('editIngCalories').value = ing.calories;
+  document.getElementById('editIngFat').value = ing.fat;
+  document.getElementById('editIngPhosphorus').value = ing.phosphorus;
+  document.getElementById('editIngCalcium').value = ing.calcium;
+  document.getElementById('editIngPotassium').value = ing.potassium;
+  document.getElementById('editIngModal').classList.add('open');
+}
+
+async function saveEditIngredient() {
+  const id = document.getElementById('editIngId').value;
+  const body = {
+    name: document.getElementById('editIngName').value.trim(),
+    protein: parseFloat(document.getElementById('editIngProtein').value) || 0,
+    calories: parseFloat(document.getElementById('editIngCalories').value) || 0,
+    fat: parseFloat(document.getElementById('editIngFat').value) || 0,
+    phosphorus: parseFloat(document.getElementById('editIngPhosphorus').value) || 0,
+    calcium: parseFloat(document.getElementById('editIngCalcium').value) || 0,
+    potassium: parseFloat(document.getElementById('editIngPotassium').value) || 0,
+  };
+  if (!body.name) { showToast('名称不能为空', 'error'); return; }
+  const resp = await fetch(`${API}/api/ingredients/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const data = await resp.json();
+  if (data.success) {
+    showToast('✅ 修改成功');
+    closeModal('editIngModal');
+    loadIngredients();
+  } else {
+    showToast(data.error || '修改失败', 'error');
+  }
+}
+
+async function delIngredient(id, name) {
+  if (!confirm(`确定要删除食材"${name}"吗？`)) return;
+  const resp = await fetch(`${API}/api/ingredients/${id}`, { method: 'DELETE' });
+  const data = await resp.json();
+  if (data.success) { showToast('已删除'); loadIngredients(); }
+  else showToast(data.error || '删除失败', 'error');
+}
+
+function updateIngredientSelects() {
+  document.querySelectorAll('.meal-ing-select').forEach(sel => {
+    const curVal = sel.value;
+    sel.innerHTML = '<option value="">-- 选择食材 --</option>' +
+      ingredients.map(i => `<option value="${i.id}"${i.id == curVal ? ' selected' : ''}>${escHtml(i.name)}</option>`).join('');
+  });
+}
+
+// ===== 饮食记录 =====
+async function loadDiet() {
+  const date = document.getElementById('dietDate').value;
+  if (!date) return;
+  const resp = await fetch(`${API}/api/diet/${date}`);
+  const data = await resp.json();
+  dietData = data.data || {};
+  renderMeals();
+  renderDailySummary();
+}
+
+function renderMeals() {
+  const container = document.getElementById('meals-container');
+  container.innerHTML = MEAL_TYPES.map(meal => renderMealSection(meal)).join('');
+}
+
+function renderMealSection(meal) {
+  const records = dietData[meal] || [];
+  const total = calcTotal(records);
+  const color = MEAL_COLORS[meal] || '#888';
+  const icon = MEAL_ICONS[meal] || '🍽️';
+
+  let recordsHtml = '';
+  if (records.length === 0) {
+    recordsHtml = '<div class="empty-hint" style="padding:12px 0;font-size:13px;">暂无记录，请在下方添加</div>';
+  } else {
+    recordsHtml = records.map(r => `
+      <div class="food-item">
+        <div style="flex:1">
+          <div class="food-name">${escHtml(r.ingredient_name)}</div>
+          <div class="food-nutrients">
+            <span>蛋白 ${fmtNum(r.protein,2)}g</span>
+            <span>热量 ${fmtNum(r.calories,1)}kcal</span>
+            <span>脂 ${fmtNum(r.fat,2)}g</span>
+            <span>磷 ${fmtNum(r.phosphorus,1)}mg</span>
+            <span>钙 ${fmtNum(r.calcium,1)}mg</span>
+          </div>
+        </div>
+        <div class="food-amount">${r.amount}<span style="font-size:11px;color:#aaa;margin-left:1px">g</span></div>
+        <button class="btn-del-food" onclick="delDietRecord(${r.id})" title="删除">×</button>
+      </div>
+    `).join('');
+  }
+
+  const fatCalRatio = total.calories > 0 ? (total.fat / total.calories * 100).toFixed(2) : 0;
+
+  return `
+    <div class="card meal-section" data-meal="${escHtml(meal)}">
+      <div class="meal-header" onclick="toggleMeal('${escHtml(meal)}')">
+        <span class="meal-title" style="border-left-color:${color}">${icon} ${meal}</span>
+        <span class="meal-total">${records.length > 0 ? `${fmtNum(total.calories,1)} kcal` : '未记录'}</span>
+        <span class="meal-toggle open" id="toggle-${encodeURIComponent(meal)}">▼</span>
+      </div>
+      <div class="meal-body" id="body-${encodeURIComponent(meal)}">
+        ${recordsHtml}
+        <div class="add-food-form">
+          <div class="form-group">
+            <label class="form-label">选择食材</label>
+            <select class="form-select ingredient-select meal-ing-select" id="sel-${encodeURIComponent(meal)}">
+              <option value="">-- 选择食材 --</option>
+              ${ingredients.map(i => `<option value="${i.id}">${escHtml(i.name)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">用量 (g)</label>
+            <input type="number" class="form-input amount-input" id="amt-${encodeURIComponent(meal)}" placeholder="0" step="0.1" min="0">
+          </div>
+          <button class="btn-add" onclick="addDietRecord('${escHtml(meal)}')">+ 添加</button>
+        </div>
+        ${records.length > 0 ? `
+        <div style="margin-top:8px;padding:8px 12px;background:#FFF8F3;border-radius:8px;font-size:13px;color:#666;display:flex;gap:14px;flex-wrap:wrap;">
+          <span>📊 本餐合计：</span>
+          <span>蛋白 <b>${fmtNum(total.protein,2)}g</b></span>
+          <span>热量 <b>${fmtNum(total.calories,1)} kcal</b></span>
+          <span>脂肪 <b>${fmtNum(total.fat,2)}g</b></span>
+          <span>脂/热比 <b>${fatCalRatio}g/100kcal</b></span>
+        </div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function toggleMeal(meal) {
+  const body = document.getElementById('body-' + encodeURIComponent(meal));
+  const toggle = document.getElementById('toggle-' + encodeURIComponent(meal));
+  if (!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : '';
+  toggle.classList.toggle('open', !isOpen);
+}
+
+async function addDietRecord(meal) {
+  const date = document.getElementById('dietDate').value;
+  if (!date) { showToast('请先选择日期', 'error'); return; }
+  const selEl = document.getElementById('sel-' + encodeURIComponent(meal));
+  const amtEl = document.getElementById('amt-' + encodeURIComponent(meal));
+  const ingId = selEl ? selEl.value : '';
+  const amount = amtEl ? parseFloat(amtEl.value) : 0;
+  if (!ingId) { showToast('请选择食材', 'error'); return; }
+  if (!amount || amount <= 0) { showToast('请输入有效用量', 'error'); return; }
+  const body = { record_date: date, meal_type: meal, ingredient_id: parseInt(ingId), amount };
+  const resp = await fetch(`${API}/api/diet`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const data = await resp.json();
+  if (data.success) {
+    showToast('✅ 已添加');
+    loadDiet();
+  } else {
+    showToast(data.error || '添加失败', 'error');
+  }
+}
+
+async function delDietRecord(id) {
+  const resp = await fetch(`${API}/api/diet/${id}`, { method: 'DELETE' });
+  const data = await resp.json();
+  if (data.success) { showToast('已删除'); loadDiet(); }
+  else showToast(data.error || '删除失败', 'error');
+}
+
+// ===== 每日汇总 =====
+function renderDailySummary() {
+  const allRecords = Object.values(dietData).flat();
+  const total = calcTotal(allRecords);
+  const el = document.getElementById('daily-summary-content');
+
+  if (allRecords.length === 0) {
+    el.innerHTML = '<div class="empty-hint">今日暂无饮食记录</div>';
+    return;
+  }
+
+  const fatCalRatio = total.calories > 0 ? (total.fat / total.calories * 100) : 0;
+  const pct = (val, lim) => lim > 0 ? Math.min((val / lim * 100), 150) : 0;
+  const pctReal = (val, lim) => lim > 0 ? (val / lim * 100) : 0;
+  const colorClass = (p) => p <= 70 ? 'fill-safe' : p <= 100 ? 'fill-warn' : 'fill-danger';
+  const textClass = (p) => p <= 100 ? '' : 'text-danger';
+
+  const nutrients = [
+    { key: 'protein', label: '蛋白质', unit: 'g', val: total.protein, lim: limits.protein_limit, icon: '🥩' },
+    { key: 'calories', label: '热量', unit: 'kcal', val: total.calories, lim: limits.calories_limit, icon: '🔥' },
+    { key: 'fat', label: '脂肪', unit: 'g', val: total.fat, lim: limits.fat_limit, icon: '🫙' },
+    { key: 'phosphorus', label: '磷', unit: 'mg', val: total.phosphorus, lim: limits.phosphorus_limit, icon: '🔬' },
+    { key: 'calcium', label: '钙', unit: 'mg', val: total.calcium, lim: limits.calcium_limit, icon: '🦴' },
+    { key: 'potassium', label: '钾', unit: 'mg', val: total.potassium, lim: limits.potassium_limit, icon: '🍌' },
+  ];
+
+  // 进度条
+  const barsHtml = nutrients.map(n => {
+    const p = pctReal(n.val, n.lim);
+    const pBar = Math.min(p, 150);
+    const cls = colorClass(p);
+    const tc = textClass(p);
+    return `
+      <div class="progress-item">
+        <div class="progress-label">
+          <span class="progress-name">${n.icon} ${n.label}</span>
+          <span class="progress-val ${tc}">${fmtNum(n.val, 2)} ${n.unit} / ${n.lim} ${n.unit} (${p.toFixed(1)}%)</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill ${cls}" style="width:${pBar}%"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // 脂肪/热量比
+  const ratioLevel = fatCalRatio < 1.5 ? {cls:'level-low', txt:'✅ 适宜'} :
+                     fatCalRatio < 2.0 ? {cls:'level-mid', txt:'⚠️ 略偏高'} :
+                     fatCalRatio < 2.5 ? {cls:'level-high', txt:'🔴 偏高'} :
+                     {cls:'level-vhigh', txt:'🚨 过高'};
+
+  // 表格汇总（每餐对比）
+  const mealRows = MEAL_TYPES.map(meal => {
+    const recs = dietData[meal] || [];
+    if (recs.length === 0) return '';
+    const t = calcTotal(recs);
+    return `
+      <tr>
+        <td>${MEAL_ICONS[meal] || ''} ${meal}</td>
+        <td>${fmtNum(t.protein, 2)}</td>
+        <td>${fmtNum(t.calories, 1)}</td>
+        <td>${fmtNum(t.fat, 3)}</td>
+        <td>${fmtNum(t.phosphorus, 1)}</td>
+        <td>${fmtNum(t.calcium, 1)}</td>
+        <td>${fmtNum(t.potassium, 1)}</td>
+        <td>${t.calories > 0 ? (t.fat / t.calories * 100).toFixed(2) : '-'}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const p = (v, l) => {
+    const pct = l > 0 ? v / l * 100 : 0;
+    const cls = pct > 100 ? 'text-danger' : pct > 80 ? 'text-warn' : '';
+    return `<span class="${cls}">${fmtNum(v, 2)}</span>`;
+  };
+
+  el.innerHTML = `
+    <div class="progress-section">${barsHtml}</div>
+
+    <div class="ratio-card">
+      <div>
+        <div class="ratio-label">脂肪 / 热量比</div>
+        <div class="ratio-ref">参考值: &lt;1.5g/100kcal 为适宜</div>
+      </div>
+      <div style="text-align:right">
+        <div class="ratio-value">${fatCalRatio.toFixed(2)}<span style="font-size:14px;font-weight:400"> g/100kcal</span></div>
+        <span class="ratio-level ${ratioLevel.cls}">${ratioLevel.txt}</span>
+      </div>
+    </div>
+
+    <div style="margin-top:16px">
+      <div style="font-size:14px;font-weight:700;color:#555;margin-bottom:8px;">📋 各餐明细与每日合计</div>
+      <div class="ing-table-wrapper">
+        <table class="nutrition-table">
+          <thead>
+            <tr>
+              <th>餐次</th>
+              <th>蛋白(g)</th>
+              <th>热量(kcal)</th>
+              <th>脂肪(g)</th>
+              <th>磷(mg)</th>
+              <th>钙(mg)</th>
+              <th>钾(mg)</th>
+              <th>脂/热比</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${mealRows}
+            <tr class="total-row">
+              <td>每日合计</td>
+              <td>${fmtNum(total.protein, 2)}</td>
+              <td>${fmtNum(total.calories, 1)}</td>
+              <td>${fmtNum(total.fat, 3)}</td>
+              <td>${fmtNum(total.phosphorus, 1)}</td>
+              <td>${fmtNum(total.calcium, 1)}</td>
+              <td>${fmtNum(total.potassium, 1)}</td>
+              <td>${fatCalRatio.toFixed(2)}</td>
+            </tr>
+            <tr class="limit-row">
+              <td>推荐上限</td>
+              <td>${limits.protein_limit}</td>
+              <td>${limits.calories_limit}</td>
+              <td>${limits.fat_limit}</td>
+              <td>${limits.phosphorus_limit}</td>
+              <td>${limits.calcium_limit}</td>
+              <td>${limits.potassium_limit}</td>
+              <td>&lt;1.5</td>
+            </tr>
+            <tr class="percent-row">
+              <td style="color:#888;font-size:12px">占比%</td>
+              ${['protein','calories','fat','phosphorus','calcium','potassium'].map(k => {
+                const pct = limits[k+'_limit'] > 0 ? (total[k] / limits[k+'_limit'] * 100).toFixed(1) : '-';
+                const cls = pct > 100 ? 'text-danger' : pct > 80 ? 'text-warn' : 'text-success';
+                return `<td class="${cls}">${pct}%</td>`;
+              }).join('')}
+              <td>-</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ===== 营养上限设置 =====
+async function loadLimits() {
+  const resp = await fetch(`${API}/api/limits`);
+  const data = await resp.json();
+  if (data.success && data.data) limits = data.data;
+}
+
+function loadSettingsForm() {
+  document.getElementById('setWeight').value = limits.dog_weight || 7.2;
+  document.getElementById('setProtein').value = limits.protein_limit || 20.16;
+  document.getElementById('setCalories').value = limits.calories_limit || 576;
+  document.getElementById('setFat').value = limits.fat_limit || 10.8;
+  document.getElementById('setPhosphorus').value = limits.phosphorus_limit || 432;
+  document.getElementById('setCalcium').value = limits.calcium_limit || 864;
+  document.getElementById('setPotassium').value = limits.potassium_limit || 1440;
+}
+
+async function saveLimits() {
+  const body = {
+    dog_weight: parseFloat(document.getElementById('setWeight').value) || 7.2,
+    protein_limit: parseFloat(document.getElementById('setProtein').value) || 20.16,
+    calories_limit: parseFloat(document.getElementById('setCalories').value) || 576,
+    fat_limit: parseFloat(document.getElementById('setFat').value) || 10.8,
+    phosphorus_limit: parseFloat(document.getElementById('setPhosphorus').value) || 432,
+    calcium_limit: parseFloat(document.getElementById('setCalcium').value) || 864,
+    potassium_limit: parseFloat(document.getElementById('setPotassium').value) || 1440,
+  };
+  const resp = await fetch(`${API}/api/limits`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const data = await resp.json();
+  if (data.success) {
+    await loadLimits();
+    showToast('✅ 设置已保存');
+    renderDailySummary();
+  } else {
+    showToast(data.error || '保存失败', 'error');
+  }
+}
+
+// ===== 历史分析 =====
+function initHistoryPage() {
+  // 默认查近30天
+  if (!document.getElementById('historyStart').value) {
+    setHistoryRange(30);
+  } else {
+    loadHistory();
+  }
+}
+
+function setHistoryRange(days) {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(end.getDate() - days + 1);
+  document.getElementById('historyStart').value = start.toLocaleDateString('en-CA');
+  document.getElementById('historyEnd').value = end.toLocaleDateString('en-CA');
+  // 高亮按钮
+  document.querySelectorAll('.btn-quick').forEach(b => b.classList.remove('active'));
+  event && event.target && event.target.classList.add('active');
+  loadHistory();
+}
+
+async function loadHistory() {
+  const start_date = document.getElementById('historyStart').value;
+  const end_date = document.getElementById('historyEnd').value;
+  if (!start_date || !end_date) { showToast('请选择日期范围', 'error'); return; }
+
+  const resp = await fetch(`${API}/api/history?start_date=${start_date}&end_date=${end_date}`);
+  const data = await resp.json();
+  if (!data.success) { showToast(data.error || '查询失败', 'error'); return; }
+
+  historyData = data.data || [];
+  renderHistoryList();
+  renderTrendChart();
+  renderRatioChart();
+}
+
+function renderHistoryList() {
+  const el = document.getElementById('history-list');
+  if (!historyData.length) {
+    el.innerHTML = '<div class="empty-hint">该日期范围内暂无记录</div>';
+    return;
+  }
+
+  // 按日期倒序
+  const sorted = [...historyData].sort((a, b) => b.record_date.localeCompare(a.record_date));
+
+  el.innerHTML = sorted.map(day => {
+    const fatRatio = day.total_calories > 0 ? (day.total_fat / day.total_calories * 100).toFixed(2) : '-';
+    const pctProtein = limits.protein_limit > 0 ? (day.total_protein / limits.protein_limit * 100).toFixed(0) : '-';
+    const pctCalories = limits.calories_limit > 0 ? (day.total_calories / limits.calories_limit * 100).toFixed(0) : '-';
+    const pctPhosphorus = limits.phosphorus_limit > 0 ? (day.total_phosphorus / limits.phosphorus_limit * 100).toFixed(0) : '-';
+
+    return `
+      <div class="history-day-card" id="hc-${day.record_date}" onclick="toggleHistoryDay('${day.record_date}')">
+        <div class="history-day-header">
+          <div>
+            <span class="history-day-date">📅 ${day.record_date}</span>
+            <span style="font-size:12px;color:#aaa;margin-left:6px;">${day.item_count || 0}项</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div class="history-day-summary">
+              <span>蛋白${pctProtein}%</span>
+              <span>热量${pctCalories}%</span>
+              <span>磷${pctPhosphorus}%</span>
+            </div>
+            <span class="history-day-toggle" id="ht-${day.record_date}">▼</span>
+          </div>
+        </div>
+        <div style="margin-top:6px;font-size:13px;color:#555;">
+          蛋白 <b>${fmtNum(day.total_protein,2)}g</b> · 热量 <b>${fmtNum(day.total_calories,1)}kcal</b> · 脂肪 <b>${fmtNum(day.total_fat,2)}g</b> · 脂/热比 <b>${fatRatio}</b>
+        </div>
+        <div class="history-day-detail" id="hd-${day.record_date}">
+          <div style="text-align:center;padding:10px;color:#aaa;font-size:13px;">加载中…</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function toggleHistoryDay(date) {
+  const detail = document.getElementById('hd-' + date);
+  const toggle = document.getElementById('ht-' + date);
+  const card = document.getElementById('hc-' + date);
+  if (!detail) return;
+
+  const isOpen = detail.classList.contains('open');
+  if (isOpen) {
+    detail.classList.remove('open');
+    toggle.classList.remove('open');
+    card.classList.remove('expanded');
+    return;
+  }
+
+  detail.classList.add('open');
+  toggle.classList.add('open');
+  card.classList.add('expanded');
+
+  // 如果已经加载过，不重复请求
+  if (detail.dataset.loaded === 'true') return;
+
+  const resp = await fetch(`${API}/api/history/${date}`);
+  const data = await resp.json();
+  if (!data.success) { detail.innerHTML = '<div style="color:var(--danger);padding:8px;">加载失败</div>'; return; }
+
+  const { meals, totals } = data.data;
+  let html = '';
+
+  MEAL_TYPES.forEach(meal => {
+    const items = meals[meal] || [];
+    if (!items.length) return;
+    html += `
+      <div class="history-meal-group">
+        <div class="history-meal-title">${MEAL_ICONS[meal] || ''} ${meal}</div>
+        <div class="history-meal-items">
+          ${items.map(r => `${escHtml(r.ingredient_name)} ${r.amount}g（蛋白${fmtNum(r.protein,2)}g 热量${fmtNum(r.calories,1)}kcal 脂${fmtNum(r.fat,2)}g 磷${fmtNum(r.phosphorus,1)}mg）`).join('<br>')}
+        </div>
+      </div>
+    `;
+  });
+
+  const fatRatio = totals.calories > 0 ? (totals.fat / totals.calories * 100).toFixed(2) : '-';
+  html += `
+    <div class="history-day-totals">
+      <div>蛋白 <b>${fmtNum(totals.protein,2)}g</b></div>
+      <div>热量 <b>${fmtNum(totals.calories,1)}kcal</b></div>
+      <div>脂肪 <b>${fmtNum(totals.fat,2)}g</b></div>
+      <div>磷 <b>${fmtNum(totals.phosphorus,1)}mg</b></div>
+      <div>钙 <b>${fmtNum(totals.calcium,1)}mg</b></div>
+      <div>钾 <b>${fmtNum(totals.potassium,1)}mg</b></div>
+      <div>脂/热比 <b>${fatRatio}</b></div>
+    </div>
+  `;
+
+  detail.innerHTML = html;
+  detail.dataset.loaded = 'true';
+}
+
+function switchChart(view) {
+  currentChartView = view;
+  document.querySelectorAll('.chart-tab-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  renderTrendChart();
+}
+
+function renderTrendChart() {
+  if (!historyData.length) return;
+
+  const sorted = [...historyData].sort((a, b) => a.record_date.localeCompare(b.record_date));
+  const labels = sorted.map(d => d.record_date.slice(5)); // MM-DD
+
+  const datasets = [];
+  const nutrientConfigs = {
+    protein:    { label: '蛋白质(g)', color: '#FF6B35', field: 'total_protein', limit: limits.protein_limit, limitLabel: '蛋白上限' },
+    calories:   { label: '热量(kcal)', color: '#E53935', field: 'total_calories', limit: limits.calories_limit, limitLabel: '热量上限' },
+    fat:        { label: '脂肪(g)', color: '#AB47BC', field: 'total_fat', limit: limits.fat_limit, limitLabel: '脂肪上限' },
+    phosphorus: { label: '磷(mg)', color: '#1E88E5', field: 'total_phosphorus', limit: limits.phosphorus_limit, limitLabel: '磷上限' },
+    calcium:    { label: '钙(mg)', color: '#43A047', field: 'total_calcium', limit: limits.calcium_limit, limitLabel: '钙上限' },
+    potassium:  { label: '钾(mg)', color: '#FDD835', field: 'total_potassium', limit: limits.potassium_limit, limitLabel: '钾上限' },
+  };
+
+  if (currentChartView === 'all') {
+    // 归一化百分比模式：每个指标都转为占上限的百分比
+    Object.keys(nutrientConfigs).forEach(key => {
+      const cfg = nutrientConfigs[key];
+      datasets.push({
+        label: cfg.label,
+        data: sorted.map(d => cfg.limit > 0 ? +((d[cfg.field] || 0) / cfg.limit * 100).toFixed(1) : 0),
+        borderColor: cfg.color,
+        backgroundColor: cfg.color + '20',
+        borderWidth: 2,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        tension: 0.3,
+        fill: false,
+      });
+    });
+    // 100% 参考线
+    datasets.push({
+      label: '推荐上限(100%)',
+      data: sorted.map(() => 100),
+      borderColor: '#D9534F',
+      borderWidth: 2,
+      borderDash: [6, 4],
+      pointRadius: 0,
+      fill: false,
+    });
+  } else {
+    const cfg = nutrientConfigs[currentChartView];
+    if (cfg) {
+      datasets.push({
+        label: cfg.label,
+        data: sorted.map(d => +(d[cfg.field] || 0).toFixed(2)),
+        borderColor: cfg.color,
+        backgroundColor: cfg.color + '30',
+        borderWidth: 2.5,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        tension: 0.3,
+        fill: true,
+      });
+      // 上限参考线
+      datasets.push({
+        label: cfg.limitLabel,
+        data: sorted.map(() => cfg.limit),
+        borderColor: '#D9534F',
+        borderWidth: 2,
+        borderDash: [6, 4],
+        pointRadius: 0,
+        fill: false,
+      });
+    }
+  }
+
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  if (trendChart) trendChart.destroy();
+
+  trendChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            title: (items) => sorted[items[0].dataIndex]?.record_date || '',
+          }
+        }
+      },
+      scales: {
+        y: {
+          title: { display: true, text: currentChartView === 'all' ? '占推荐上限%' : '' },
+          beginAtZero: true,
+        },
+        x: { ticks: { font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+function renderRatioChart() {
+  if (!historyData.length) return;
+
+  const sorted = [...historyData].sort((a, b) => a.record_date.localeCompare(b.record_date));
+  const labels = sorted.map(d => d.record_date.slice(5));
+  const ratios = sorted.map(d => d.total_calories > 0 ? +((d.total_fat / d.total_calories) * 100).toFixed(2) : 0);
+
+  const ctx = document.getElementById('ratioChart').getContext('2d');
+  if (ratioChart) ratioChart.destroy();
+
+  ratioChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: '脂肪/热量比 (g/100kcal)',
+          data: ratios,
+          backgroundColor: ratios.map(r => r < 1.5 ? '#5CB85C' : r < 2.0 ? '#F0AD4E' : r < 2.5 ? '#FF9800' : '#D9534F'),
+          borderRadius: 4,
+          barPercentage: 0.7,
+        },
+        {
+          label: '适宜上限 (1.5)',
+          data: sorted.map(() => 1.5),
+          type: 'line',
+          borderColor: '#5CB85C',
+          borderWidth: 2,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          fill: false,
+        },
+        {
+          label: '偏高线 (2.5)',
+          data: sorted.map(() => 2.5),
+          type: 'line',
+          borderColor: '#D9534F',
+          borderWidth: 2,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          fill: false,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            title: (items) => sorted[items[0].dataIndex]?.record_date || '',
+            label: (item) => {
+              if (item.datasetIndex === 0) return `脂/热比: ${item.raw} g/100kcal`;
+              return item.dataset.label;
+            }
+          }
+        }
+      },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'g/100kcal' } },
+        x: { ticks: { font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+// ===== 工具函数 =====
+function calcTotal(records) {
+  return records.reduce((acc, r) => ({
+    protein: acc.protein + (r.protein || 0),
+    calories: acc.calories + (r.calories || 0),
+    fat: acc.fat + (r.fat || 0),
+    phosphorus: acc.phosphorus + (r.phosphorus || 0),
+    calcium: acc.calcium + (r.calcium || 0),
+    potassium: acc.potassium + (r.potassium || 0),
+  }), { protein:0, calories:0, fat:0, phosphorus:0, calcium:0, potassium:0 });
+}
+
+function fmtNum(val, decimals = 2) {
+  if (val === null || val === undefined || isNaN(val)) return '-';
+  return Number(val).toFixed(decimals);
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function showToast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast ${type} show`;
+  setTimeout(() => el.className = 'toast', 2500);
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// ===== 启动 =====
+init();
+</script>
+</body>
+</html>
