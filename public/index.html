@@ -216,7 +216,6 @@
       min-width: 0;
     }
     .form-select:focus, .form-input:focus { border-color: var(--primary); }
-    .ingredient-select { min-width: 140px; }
     .amount-input { width: 90px; }
     .btn-add {
       background: var(--primary);
@@ -230,6 +229,26 @@
       white-space: nowrap;
     }
     .btn-add:hover { background: var(--primary-dark); }
+
+    /* ===== Searchable Select ===== */
+    .search-select-wrapper { position: relative; min-width: 140px; flex: 1; }
+    .search-select-input { width: 100%; cursor: pointer; }
+    .search-select-dropdown {
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 200;
+      max-height: 240px; overflow-y: auto;
+      background: white; border: 1.5px solid var(--primary-light);
+      border-radius: 8px; margin-top: 4px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      display: none;
+    }
+    .search-select-dropdown.open { display: block; }
+    .search-select-option {
+      padding: 8px 12px; font-size: 14px; cursor: pointer;
+      border-bottom: 1px solid #f5f5f5; color: var(--text);
+    }
+    .search-select-option:hover { background: #FFF5EE; }
+    .search-select-option:last-child { border-bottom: none; }
+    .search-select-empty { padding: 12px; text-align: center; color: #999; font-size: 13px; }
 
     /* ===== Nutrition Summary Table ===== */
     .nutrition-table {
@@ -659,7 +678,7 @@
 
     @media (max-width: 480px) {
       .add-food-form { flex-direction: column; }
-      .ingredient-select { width: 100%; }
+      .search-select-wrapper { width: 100%; }
       .amount-input { width: 100%; }
       .btn-add { width: 100%; }
       .nutrition-table th, .nutrition-table td { font-size: 12px; padding: 8px 5px; }
@@ -1077,12 +1096,80 @@ async function delIngredient(id, name) {
 }
 
 function updateIngredientSelects() {
-  document.querySelectorAll('.meal-ing-select').forEach(sel => {
-    const curVal = sel.value;
-    sel.innerHTML = '<option value="">-- 选择食材 --</option>' +
-      ingredients.map(i => `<option value="${i.id}"${i.id == curVal ? ' selected' : ''}>${escHtml(i.name)}</option>`).join('');
+  document.querySelectorAll('.search-select-wrapper').forEach(wrapper => {
+    const mealEnc = wrapper.id.replace('sel-wrap-', '');
+    const hidden = document.getElementById('sel-' + mealEnc);
+    const dropdown = document.getElementById('sel-drop-' + mealEnc);
+    const input = wrapper.querySelector('.search-select-input');
+    const curVal = hidden ? hidden.value : '';
+    const curName = curVal ? (ingredients.find(i => i.id == curVal)?.name || '') : '';
+    dropdown.innerHTML = ingredients.map(i =>
+      `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}" onclick="selectSearchOption('${mealEnc}', ${i.id}, '${escHtml(i.name)}')">${escHtml(i.name)}</div>`
+    ).join('');
+    if (input) input.value = curName;
   });
 }
+
+function openSearchDropdown(mealEnc) {
+  closeAllSearchDropdowns();
+  const drop = document.getElementById('sel-drop-' + mealEnc);
+  if (!drop) return;
+  drop.classList.add('open');
+  // 如果没有选项数据，填充一次
+  if (!drop.querySelector('.search-select-option')) {
+    drop.innerHTML = ingredients.map(i =>
+      `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}" onclick="selectSearchOption('${mealEnc}', ${i.id}, '${escHtml(i.name)}')">${escHtml(i.name)}</div>`
+    ).join('');
+  }
+  // 高亮当前选中项
+  const hidden = document.getElementById('sel-' + mealEnc);
+  const curVal = hidden ? hidden.value : '';
+  drop.querySelectorAll('.search-select-option').forEach(opt => {
+    opt.style.background = (opt.dataset.id == curVal) ? '#FFF5EE' : '';
+  });
+}
+
+function filterSearchDropdown(mealEnc, query) {
+  const drop = document.getElementById('sel-drop-' + mealEnc);
+  if (!drop) return;
+  const q = query.trim().toLowerCase();
+  let html = '';
+  const filtered = q ? ingredients.filter(i => i.name.toLowerCase().includes(q)) : ingredients;
+  if (filtered.length === 0) {
+    html = '<div class="search-select-empty">无匹配食材</div>';
+  } else {
+    html = filtered.map(i =>
+      `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}" onclick="selectSearchOption('${mealEnc}', ${i.id}, '${escHtml(i.name)}')">${escHtml(i.name)}</div>`
+    ).join('');
+  }
+  drop.innerHTML = html;
+  drop.classList.add('open');
+}
+
+function selectSearchOption(mealEnc, id, name) {
+  const hidden = document.getElementById('sel-' + mealEnc);
+  const input = document.querySelector('#sel-wrap-' + mealEnc + ' .search-select-input');
+  if (hidden) hidden.value = id;
+  if (input) input.value = name;
+  closeAllSearchDropdowns();
+}
+
+function closeAllSearchDropdowns() {
+  document.querySelectorAll('.search-select-dropdown.open').forEach(d => d.classList.remove('open'));
+}
+
+function handleSearchKey(e, mealEnc) {
+  if (e.key === 'Escape') {
+    closeAllSearchDropdowns();
+    e.target.blur();
+  }
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.search-select-wrapper')) {
+    closeAllSearchDropdowns();
+  }
+});
 
 // ===== 饮食记录 =====
 async function loadDiet() {
@@ -1143,10 +1230,17 @@ function renderMealSection(meal) {
         <div class="add-food-form">
           <div class="form-group">
             <label class="form-label">选择食材</label>
-            <select class="form-select ingredient-select meal-ing-select" id="sel-${encodeURIComponent(meal)}">
-              <option value="">-- 选择食材 --</option>
-              ${ingredients.map(i => `<option value="${i.id}">${escHtml(i.name)}</option>`).join('')}
-            </select>
+            <div class="search-select-wrapper" id="sel-wrap-${encodeURIComponent(meal)}">
+              <input type="text" class="form-input search-select-input" placeholder="搜索或选择食材…"
+                onfocus="openSearchDropdown('${encodeURIComponent(meal)}')"
+                oninput="filterSearchDropdown('${encodeURIComponent(meal)}', this.value)"
+                onkeydown="handleSearchKey(event, '${encodeURIComponent(meal)}')"
+                autocomplete="off">
+              <input type="hidden" id="sel-${encodeURIComponent(meal)}" value="">
+              <div class="search-select-dropdown" id="sel-drop-${encodeURIComponent(meal)}">
+                ${ingredients.map(i => `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}" onclick="selectSearchOption('${encodeURIComponent(meal)}', ${i.id}, '${escHtml(i.name)}')">${escHtml(i.name)}</div>`).join('')}
+              </div>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">用量 (g)</label>
