@@ -1104,7 +1104,7 @@ function updateIngredientSelects() {
     const curVal = hidden ? hidden.value : '';
     const curName = curVal ? (ingredients.find(i => i.id == curVal)?.name || '') : '';
     dropdown.innerHTML = ingredients.map(i =>
-      `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}">${escHtml(i.name)}</div>`
+      `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}" onmousedown="event.preventDefault(); selectSearchOption('${mealEnc}', ${i.id}, '${escHtml(i.name)}')">${escHtml(i.name)}</div>`
     ).join('');
     if (input) input.value = curName;
   });
@@ -1118,7 +1118,7 @@ function openSearchDropdown(mealEnc) {
   // 如果没有选项数据，填充一次
   if (!drop.querySelector('.search-select-option')) {
     drop.innerHTML = ingredients.map(i =>
-      `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}">${escHtml(i.name)}</div>`
+      `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}" onmousedown="event.preventDefault(); selectSearchOption('${mealEnc}', ${i.id}, '${escHtml(i.name)}')">${escHtml(i.name)}</div>`
     ).join('');
   }
   // 高亮当前选中项
@@ -1139,19 +1139,11 @@ function filterSearchDropdown(mealEnc, query) {
     html = '<div class="search-select-empty">无匹配食材</div>';
   } else {
     html = filtered.map(i =>
-      `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}">${escHtml(i.name)}</div>`
+      `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}" onmousedown="event.preventDefault(); selectSearchOption('${mealEnc}', ${i.id}, '${escHtml(i.name)}')">${escHtml(i.name)}</div>`
     ).join('');
   }
   drop.innerHTML = html;
   drop.classList.add('open');
-}
-
-function handleSearchSelectMousedown(e, mealEnc) {
-  const option = e.target.closest('.search-select-option');
-  if (!option) return;
-  const id = option.dataset.id;
-  const name = option.dataset.name;
-  if (id && name) selectSearchOption(mealEnc, id, name);
 }
 
 function selectSearchOption(mealEnc, id, name) {
@@ -1245,8 +1237,8 @@ function renderMealSection(meal) {
                 onkeydown="handleSearchKey(event, '${encodeURIComponent(meal)}')"
                 autocomplete="off">
               <input type="hidden" id="sel-${encodeURIComponent(meal)}" value="">
-              <div class="search-select-dropdown" id="sel-drop-${encodeURIComponent(meal)}" onmousedown="handleSearchSelectMousedown(event, '${encodeURIComponent(meal)}')">
-                ${ingredients.map(i => `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}">${escHtml(i.name)}</div>`).join('')}
+              <div class="search-select-dropdown" id="sel-drop-${encodeURIComponent(meal)}">
+                ${ingredients.map(i => `<div class="search-select-option" data-id="${i.id}" data-name="${escHtml(i.name)}" onmousedown="event.preventDefault(); selectSearchOption('${encodeURIComponent(meal)}', ${i.id}, '${escHtml(i.name)}')">${escHtml(i.name)}</div>`).join('')}
               </div>
             </div>
           </div>
